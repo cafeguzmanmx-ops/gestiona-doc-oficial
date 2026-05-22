@@ -1,0 +1,2 @@
+Título: Necesito corregir errores de compilación y desplegar Gestiona Doc en Railway
+Descripción: Tengo un proyecto SaaS para municipios (NestJS + React + Prisma). El backend ya compila, pero el frontend tiene errores de TypeScript (módulos no encontrados). Necesito que alguien aplique las correcciones (ya tengo la lista de errores) y lo despliegue en Railway para tener una demo funcional. Pago por hora o por trabajo completo. Presupuesto: $500-1500 MXN. Interesados enviar DM.

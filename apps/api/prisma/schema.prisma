@@ -1,0 +1,336 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN_MUNICIPAL
+  DIRECTOR_AREA
+  CAPTURISTA
+  CONSULTA
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum AuditAction {
+  TENANT_CREATED
+  TENANT_UPDATED
+  USER_CREATED
+  USER_UPDATED
+  USER_DEACTIVATED
+  USER_LOGIN
+  USER_LOGIN_FAILED
+  AREA_CREATED
+  AREA_UPDATED
+  AREA_DEACTIVATED
+  OFICIO_CREATED
+  OFICIO_VIEWED
+  OFICIO_STATUS_CHANGED
+  OFICIO_CLOSED
+  OFICIO_FILE_DOWNLOADED
+  SEGUIMIENTO_CREATED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_UPDATED
+  DEMO_DATA_CREATED
+  SECURITY_ACCESS_DENIED
+  DEMO_REQUEST_CREATED
+  DEMO_REQUEST_UPDATED
+}
+
+model Tenant {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  state         String
+  phone         String?
+  email         String?
+  status        TenantStatus @default(TRIAL)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  users         User[]
+  areas         Area[]
+  subscriptions Subscription[]
+  auditLogs     AuditLog[]
+  oficios       Oficio[]
+  archivos      Archivo[]
+  seguimientos  Seguimiento[]
+  notifications  Notification[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model Area {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String?
+  parentId  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent    Area?    @relation("AreaHierarchy", fields: [parentId], references: [id])
+  children  Area[]   @relation("AreaHierarchy")
+  users     User[]
+  oficiosResponsables Oficio[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("areas")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String?
+  areaId       String?
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  position     String?
+  role         UserRole
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  area         Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  auditLogs    AuditLog[]
+  oficiosCreados Oficio[] @relation("OficioCreatedBy")
+  oficiosCerrados Oficio[] @relation("OficioClosedBy")
+  archivosSubidos Archivo[]
+  seguimientos Seguimiento[]
+  notifications Notification[]
+
+  @@index([tenantId])
+  @@index([role])
+  @@map("users")
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  tenantId          String
+  planCode          String             @default("MUNICIPAL_PILOT")
+  status            SubscriptionStatus @default(TRIAL)
+  startsAt          DateTime           @default(now())
+  trialEndsAt        DateTime
+  currentPeriodEndsAt DateTime?
+  annualPriceCentsMx  Int?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  tenantId  String?
+  userId    String?
+  action    AuditAction
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  tenant    Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+enum OficioStatus {
+  RECIBIDO
+  TURNADO
+  EN_PROCESO
+  ATENDIDO
+  CERRADO
+  VENCIDO
+}
+
+enum OficioPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum ArchivoTipo {
+  OFICIO_RECIBIDO
+  ANEXO
+  RESPUESTA
+  SEGUIMIENTO
+}
+
+enum NotificationType {
+  OFICIO_ASIGNADO
+  OFICIO_PROXIMO_VENCER
+  OFICIO_VENCIDO
+  OFICIO_CERRADO
+  SUSCRIPCION_PROXIMA_VENCER
+}
+
+model Oficio {
+  id                String         @id @default(cuid())
+  tenantId          String
+  folio             String
+  externalNumber    String?
+  receivedAt        DateTime
+  senderName        String
+  senderAgency      String?
+  subject           String
+  description       String?
+  priority          OficioPriority @default(MEDIA)
+  dueAt             DateTime?
+  responsibleAreaId String?
+  status            OficioStatus   @default(RECIBIDO)
+  createdById       String
+  closedById        String?
+  closedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  responsibleArea   Area?          @relation(fields: [responsibleAreaId], references: [id], onDelete: SetNull)
+  createdBy         User           @relation("OficioCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  closedBy          User?          @relation("OficioClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  archivos          Archivo[]
+  seguimientos      Seguimiento[]
+  notifications     Notification[]
+
+  @@unique([tenantId, folio])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, responsibleAreaId])
+  @@index([tenantId, dueAt])
+  @@map("oficios")
+}
+
+model Archivo {
+  id            String      @id @default(cuid())
+  tenantId      String
+  oficioId      String?
+  seguimientoId String?
+  uploadedById  String
+  tipo          ArchivoTipo @default(ANEXO)
+  fileName      String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  path          String
+  createdAt     DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  oficio        Oficio?     @relation(fields: [oficioId], references: [id], onDelete: Cascade)
+  seguimiento   Seguimiento? @relation(fields: [seguimientoId], references: [id], onDelete: Cascade)
+  uploadedBy    User        @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([oficioId])
+  @@map("archivos")
+}
+
+model Seguimiento {
+  id          String        @id @default(cuid())
+  tenantId    String
+  oficioId    String
+  userId      String
+  comment     String
+  statusFrom  OficioStatus?
+  statusTo    OficioStatus?
+  createdAt   DateTime      @default(now())
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  oficio      Oficio        @relation(fields: [oficioId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  archivos    Archivo[]
+
+  @@index([tenantId])
+  @@index([oficioId])
+  @@map("seguimientos")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  tenantId  String
+  userId    String
+  oficioId  String?
+  type      NotificationType
+  title     String
+  message   String
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oficio    Oficio?          @relation(fields: [oficioId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, type, oficioId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([oficioId])
+  @@index([tenantId, readAt])
+  @@map("notifications")
+}
+
+enum DemoRequestStatus {
+  NEW
+  CONTACTED
+  DEMO_SCHEDULED
+  WON
+  LOST
+}
+
+model DemoRequest {
+  id              String            @id @default(cuid())
+  municipioName   String
+  state           String
+  contactName     String
+  position        String?
+  email           String
+  phone           String?
+  estimatedUsers  Int?
+  message         String?
+  source          String?           @default("landing")
+  status          DemoRequestStatus @default(NEW)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([status])
+  @@index([state])
+  @@index([createdAt])
+  @@map("demo_requests")
+}
+

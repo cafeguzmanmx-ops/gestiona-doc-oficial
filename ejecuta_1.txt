@@ -1,0 +1,5 @@
+@echo off
+echo Corrigiendo import en App.tsx...
+powershell -Command "(Get-Content 'apps\web\src\App.tsx') -replace 'import { LandingPage } from ''\.\.?/pages/LandingPage'';', 'import { LandingPage } from ''./pages/LandingPage'';' | Set-Content 'apps\web\src\App.tsx'"
+echo Listo.
+pause
