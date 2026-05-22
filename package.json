@@ -1,0 +1,22 @@
+{
+  "name": "gestiona-doc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gestiona Doc 1.0 - SaaS municipal mexicano para control de correspondencia oficial.",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace apps/api run start:dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:api": "npm --workspace apps/api run build",
+    "build:web": "npm --workspace apps/web run build",
+    "backup:module": "bash scripts/backup-module.sh",
+    "validate": "bash scripts/validate-project.sh",
+    "railway:preflight": "bash scripts/railway-preflight.sh"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
